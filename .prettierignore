@@ -1,6 +1,7 @@
-.next
 node_modules
 dist
 vendor
 build
 README.md
+public/vendor
+storage
