@@ -1,0 +1,86 @@
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: hr_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: hr_saas
+      MYSQL_USER: laravel
+      MYSQL_PASSWORD: "Secret@1234"   # <- match your .env password
+      MYSQL_ROOT_PASSWORD: rootsecret
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3307:3306" # optional: expose for host (3307) so it doesn't conflict with host mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - hr_network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: hr_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_USER: root
+      PMA_PASSWORD: rootsecret
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    networks:
+      - hr_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hr_app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./:/var/www/html
+      - ./vendor:/var/www/html/vendor
+    depends_on:
+      - db
+    environment:
+      # override DB settings inside the container so Laravel connects to the docker 'db' service
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=hr_saas
+      - DB_USERNAME=laravel
+      - DB_PASSWORD=Secret@1234
+      # (optional helpful envs)
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - COMPOSER_ALLOW_SUPERUSER=1
+    networks:
+      - hr_network
+
+  web:
+    image: nginx:1.26-alpine
+    container_name: hr_web
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www/html:rw
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:rw
+    depends_on:
+      - app
+    networks:
+      - hr_network
+
+volumes:
+  db_data:
+
+networks:
+  hr_network:
+    driver: bridge
